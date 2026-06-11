@@ -4,6 +4,28 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Oil Drain Plug Reference</title>
+<!--
+  CONTENT SECURITY POLICY NOTE:
+  A strict CSP (Content-Security-Policy) cannot be applied as a meta tag here because
+  the app uses inline <script> and <style> blocks, which would require 'unsafe-inline'.
+  RECOMMENDED: Set the CSP as an HTTP response header on your hosting platform instead.
+  Suggested policy for GitHub Pages / Netlify:
+    Content-Security-Policy:
+      default-src 'self';
+      script-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src https://fonts.gstatic.com;
+      connect-src https://*.supabase.co;
+      img-src 'self' data:;
+  For Netlify: add to netlify.toml [[headers]] section.
+  For GitHub Pages: use a _headers file or a reverse proxy.
+
+  GOOGLE FONTS NOTE:
+  Currently loaded via @import from fonts.googleapis.com (no SRI possible on CSS @import).
+  For maximum security, self-host the fonts or accept the CDN dependency.
+  If loaded via <link> tag instead, SRI can be added:
+    <link rel="stylesheet" href="https://fonts.googleapis.com/..." integrity="sha256-..." crossorigin="anonymous">
+-->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap');
   :root {
@@ -3589,6 +3611,15 @@ function renderTable(){
 }
 
 // ── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+// SECURITY NOTE: The anon key below is intentionally public — it is safe to expose
+// in frontend code ONLY because Row Level Security (RLS) is enabled on all tables.
+// The anon key grants only what RLS policies explicitly allow (public SELECT on
+// custom_entries; public INSERT on suggestions). It cannot be used to bypass RLS.
+//
+// ⚠️  NEVER put the Supabase service_role key in frontend code. The service_role key
+// bypasses RLS entirely and would give anyone full database access.
+//
+// To rotate the anon key: Supabase Dashboard → Settings → API → Regenerate keys.
 const SUPA_URL='https://ocbgwcnlgplnmweepxpm.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jYmd3Y25sZ3Bsbm13ZWVweHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMjA5MTcsImV4cCI6MjA5NjY5NjkxN30.Mlz7YebGmTwr6TCB-L5wKquSlYbB9-uN5ELrq9SgNzc';
 
@@ -3968,15 +3999,34 @@ async function submitSuggestion(){
   const notes=document.getElementById('s-notes').value.trim();
   if(!notes){alert('Please describe the suggestion or correction.');return;}
 
+  // Input length validation — prevents database abuse and oversized payloads
+  // RECOMMENDED: Also add server-side validation via a Supabase Edge Function or
+  // database CHECK constraints for production hardening.
+  // RECOMMENDED: For stronger abuse protection, add Cloudflare Turnstile (free CAPTCHA)
+  // or use a Supabase Edge Function as a proxy to apply server-side rate limiting.
+  const MAX = {details:1000, make:100, model:100, year:20, engine:150, name:80};
+  if(notes.length > MAX.details){
+    alert(`Details must be ${MAX.details} characters or less (currently ${notes.length}).`);return;
+  }
+  const makeVal=document.getElementById('s-make').value.trim();
+  const modelVal=document.getElementById('s-model').value.trim();
+  const yearVal=document.getElementById('s-year').value.trim();
+  const engineVal=document.getElementById('s-engine').value.trim();
+  const nameVal=document.getElementById('s-name').value.trim();
+  if(makeVal.length>MAX.make||modelVal.length>MAX.model||yearVal.length>MAX.year||
+     engineVal.length>MAX.engine||nameVal.length>MAX.name){
+    alert('One or more fields exceed the maximum allowed length.');return;
+  }
+
   // Use anon key (no auth) for suggestions — intentionally public
   const payload={
     type:document.getElementById('s-type').value,
-    make:document.getElementById('s-make').value.trim()||null,
-    model:document.getElementById('s-model').value.trim()||null,
-    year:document.getElementById('s-year').value.trim()||null,
-    engine:document.getElementById('s-engine').value.trim()||null,
+    make:makeVal||null,
+    model:modelVal||null,
+    year:yearVal||null,
+    engine:engineVal||null,
     details:notes,
-    submitted_by:document.getElementById('s-name').value.trim()||'Anonymous',
+    submitted_by:nameVal||'Anonymous',
     status:'pending'
   };
 
@@ -4037,7 +4087,7 @@ async function loadSuggestions(){
     updatePendingBadge();
     renderReview();
   }catch(err){
-    if(list) list.innerHTML=`<div class="sug-empty">Error loading: ${err.message}</div>`;
+    if(list) list.innerHTML=`<div class="sug-empty">Error loading suggestions. Please try again.</div>`;
   }
 }
 
@@ -4075,8 +4125,8 @@ function renderReview(){
           <button class="btn-sug-apply" onclick="markSuggestion('${sid}','done')">✓ Mark Done</button>
           <button class="btn-sug-dismiss" onclick="markSuggestion('${sid}','dismissed')">✕ Dismiss</button>
         </div>`
-      :`<div class="sug-actions"><button class="btn-sug-dismiss" onclick="markSuggestion('${s.id}','pending')">↺ Reopen</button></div>`;
-    return`<div class="sug-card" id="sug-${s.id}">
+      :`<div class="sug-actions"><button class="btn-sug-dismiss" onclick="markSuggestion('${sid}','pending')">↺ Reopen</button></div>`;
+    return`<div class="sug-card" id="sug-${sid}">
       <div class="sug-card-header">
         <div>
           <span class="sug-type ${tc}">${tl}</span>${statusBadge}
@@ -4227,9 +4277,9 @@ function renderCF(){
     <td>${pn(r.fram)}</td>
     <td>${pn(r.puro)}</td>
     <td>${pn(r.napa)}</td>
-    <td style="color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800">${r.torq}</td>
-    <td style="color:var(--muted);font-size:.82rem">${r.nm}</td>
-    <td><span class="app-cell">${r.app}</span></td>
+    <td style="color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800">${esc(r.torq)}</td>
+    <td style="color:var(--muted);font-size:.82rem">${esc(r.nm)}</td>
+    <td><span class="app-cell">${esc(r.app)}</span></td>
   </tr>`).join('');
 }
 
