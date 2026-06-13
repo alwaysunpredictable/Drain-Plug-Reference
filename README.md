@@ -1,114 +1,45 @@
 # Drain Plug Reference
 
-A single-page, client-side automotive reference tool for drain plug torque specs, vehicle service data, and related maintenance notes. The application runs entirely in the browser and uses Supabase for authentication, session management, and shared custom entries.
+A single-page web app for quick lookup of oil drain plug torque specs, socket sizes, drain bolt thread sizes, and cartridge oil filter torque specs. Built for techs doing oil changes who need a fast, mobile-friendly reference at the bay.
 
----
+The entire app — markup, styles, data, and logic — lives in one `index.html` file so it can be hosted on any static host (GitHub Pages, Netlify, etc.) with no build step or server.
 
-## Overview
+## Features
 
-This project is a lightweight, fast reference system designed for quick lookup of vehicle drain plug torque specifications and related service information. It includes search, filtering, suggestion workflows, and admin-style editing features — all within a single `index.html` file.
+### Drain Plug Specs
+- Cascading filters (Year → Make → Model → Engine) narrow a database of vehicle drain plug specs.
+- Each result shows torque (ft-lbs), socket size, drain bolt thread, OEM part/SAP numbers, whether a crush washer/gasket is required, and tech notes (warnings, OEM part numbers, special instructions).
+- Vehicles with plastic oil pans or no drain plug (EVs) are marked "N/A — see notes" instead of a torque value.
 
-Despite being a single-page application, it implements secure session handling, persistent login state, and remote data synchronization via Supabase.
+### Cartridge Filter Torque
+- Search by Service Champ, FRAM, Purolator, or NAPA part number, or by vehicle/application, to find cartridge filter housing torque specs (ft-lb and Nm).
 
----
+### Suggestions
+- Anyone can submit a correction, a missing vehicle/engine, or a general suggestion via a form (honeypot field and a 3-per-hour client-side rate limit help cut down on spam).
+- Logged-in admins see a Suggestions tab listing pending/dismissed/done submissions and can mark them done, dismiss them, or reopen them.
 
-## Key Features
+### Admin Editing
+- Admins log in (Supabase email/password auth) to add, edit, or delete custom entries directly from the Drain Plug Specs table.
+- Custom entries are stored in Supabase and shared with every visitor — they aren't local to one browser.
+- "Edit/Copy" on a built-in row pre-fills the editor so an admin can save a tweaked version as a new custom entry.
 
-### Secure Client-Side Architecture
-- Removed inline `onclick` handlers to eliminate XSS risks
-- Uses event delegation with `data-*` attributes for all interactive actions
-- Proper HTML escaping based on context
-- Safer string handling in dynamic UI generation
+## Architecture
 
----
+- **Frontend:** vanilla HTML/CSS/JS, no framework or build step.
+- **Built-in data:** the drain plug specs and cartridge filter cross-reference tables are embedded directly in `index.html` as JS arrays (`DATA` and `CF_DATA`).
+- **Backend:** [Supabase](https://supabase.com) provides:
+  - Email/password authentication for admins, with session persistence in `localStorage` and automatic access-token refresh.
+  - A `custom_entries` table for admin-added/edited vehicles, readable by everyone and writable by authenticated admins.
+  - A `suggestions` table that the public can write to (via the suggestion form) and admins can read/update from the Suggestions tab.
+- Row Level Security (RLS) policies on the Supabase tables control read/write access; the embedded Supabase key is the `anon` key, which is safe to expose as long as RLS is configured correctly.
 
-### Authentication & Session Management
-- Supabase authentication integration
-- Sessions stored in `localStorage`
-- Automatic token refresh (1 minute before expiration)
-- Automatic retry of failed requests after refresh
-- Clean logout clears all session data
+## Usage
 
----
-
-### Data Entry & Validation
-- Year input normalization (handles en/em dashes and spacing)
-- Strict validation for:
-  - YYYY
-  - YYYY-YYYY
-- Rejects invalid years with user feedback instead of silently storing bad data
-
----
-
-### UI / UX Improvements
-- Login modal improvements:
-  - Close button added
-  - Click-outside-to-close behavior
-  - Escape key support
-  - Prevents stale deferred actions after cancellation
-- Fixed missing `.modal-hint` styling
-- Improved feedback messaging and state handling
-
----
-
-### Data Handling Enhancements
-- Torque values:
-  - Displays "N/A — see notes" for valid zero-torque cases (e.g., EVs / plastic pan designs)
-  - Allows 0 as a valid input for admin entries
-- Suggestion system:
-  - Fixed ID comparison issues for consistent status updates
-- Custom entries now properly persist to Supabase instead of local-only storage
-
----
-
-## Architecture Notes
-
-- Fully client-side single-page application (`index.html`)
-- Uses Supabase for:
-  - Authentication
-  - Suggestions table
-  - Custom entry storage
-- No backend server required
-
----
-
-## Known Limitations / Design Decisions
-
-- Vehicle dataset is intentionally untouched when correctness cannot be verified (e.g., questionable entries like “Scion iC”)
-- Part numbers / SAP numbers are not editable via client:
-  - Requires Supabase schema changes
-- RLS (Row Level Security) policies should be reviewed:
-  - Suggestion reads are anonymous in the current implementation
-  - Write restrictions should be validated server-side
-
----
+- **Everyone:** open `index.html`, pick a Year, Make, Model, and Engine to see drain plug specs, or switch to the Cartridge Filter tab and search by part number.
+- **Admins:** click "Admin Login" in the header, sign in with a Supabase account, then use "+ Add Entry", "Edit/Copy", "Edit", and "Delete" on the Drain Plug Specs table, and review submissions under the Suggestions tab.
 
 ## Tech Stack
 
 - HTML / CSS / Vanilla JavaScript
-- Supabase (Auth + Database)
-- LocalStorage (session persistence)
-
----
-
-## Notes for Maintainers
-
-This project prioritizes:
-- correctness over guesswork in automotive data
-- client-side safety (no inline JS execution patterns)
-- resilience of session handling in unstable network conditions
-
----
-
-## Future Improvements (Suggested)
-
-- Split into modular JS files for maintainability
-- Add server-side validation layer (or Edge Functions in Supabase)
-- Expand schema for part numbers / SAP data
-- Optional offline caching layer for field use
-
----
-
-## License
-
-Internal / private use unless otherwise specified.
+- Supabase (Auth + Postgres via PostgREST)
+- LocalStorage (session persistence, suggestion rate-limiting)
